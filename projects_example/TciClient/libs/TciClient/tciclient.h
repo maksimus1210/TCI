@@ -21,7 +21,7 @@ typedef struct
 
 namespace ExpertElectronics {
 
-class TciClient : public QObject
+class TciClient final : public QObject
 {
     Q_OBJECT
 
@@ -33,7 +33,7 @@ class TciClient : public QObject
     {
         IqInt16 = 0,
         IqInt24,
-        IqInt34,
+        IqInt32,
         IqFloat32,
         IqFloat64
     }IqDataType;
@@ -69,12 +69,19 @@ public:
 
     TciTrxState& trxState();
 
-    QVector<COMPLEX> iqData();
+    QVector<COMPLEX> iqData() const;
+    QVector<COMPLEX> audioData() const;
+
+    bool sendTxAudio(const QVector<COMPLEX> &src);
+
+    void sendText(const QString &text);
 
 signals:
     void openStatusChanged(bool);
     void message(QString);
     void readyReadIq();
+    void readyReadAudio();
+    void chronoTxSignal(quint32 size);
 
 private slots:
     void onConnected();
@@ -92,7 +99,12 @@ private:
     TciParser   m_parser;
 
     QByteArray t_iqData;
-    QVector<COMPLEX> m_signal;
+    QVector<COMPLEX> m_signalIQ;
+    QVector<COMPLEX> m_signalAudio;
+
+    QByteArray t_txAudioData;
+
+    QElapsedTimer m_txTimer;
 };
 
 }  // namespace ExpertElectronics

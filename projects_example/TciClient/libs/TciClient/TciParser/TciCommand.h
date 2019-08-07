@@ -117,6 +117,33 @@ private:
     QMetaObject::Connection m_c;
 };
 
+
+
+class TciCommandTune : public TciParserCommandAbsract
+{
+    Q_OBJECT
+public:
+    TciCommandTune(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    ~TciCommandTune();
+    bool process(QStringList &string) override;
+    void status() override;
+
+private slots:
+    void currentStatus(int trx = -1);
+
+private:
+    TciCommandTune() = delete;
+    Q_DISABLE_COPY(TciCommandTune)
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+    QMetaObject::Connection m_c;
+};
+
+
+
+
 class TciCommandVfoLimits : public TciParserCommandAbsract
 {
     Q_OBJECT
@@ -199,6 +226,25 @@ public:
 private:
     TciCommandIqSampleRate() = delete;
     Q_DISABLE_COPY(TciCommandIqSampleRate)
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+    QMetaObject::Connection m_c;
+};
+
+class TciCommandAudioSampleRate : public TciParserCommandAbsract
+{
+    Q_OBJECT
+public:
+    TciCommandAudioSampleRate(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    ~TciCommandAudioSampleRate();
+    bool process(QStringList &string) override;
+    void status() override;
+
+private:
+    TciCommandAudioSampleRate() = delete;
+    Q_DISABLE_COPY(TciCommandAudioSampleRate)
 
 private:
     TciParserAbstract &m_parser;
@@ -617,6 +663,133 @@ private:
     QMetaObject::Connection m_c1;
     QMetaObject::Connection m_c2;
 };
+
+class TciCommandSetInFocus final : public TciParserCommandAbsract
+{
+    Q_OBJECT
+public:
+    TciCommandSetInFocus(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    bool process(QStringList &list) override;
+private:
+    TciCommandSetInFocus() = delete;
+    Q_DISABLE_COPY(TciCommandSetInFocus)
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+    QMetaObject::Connection m_c;
+};
+
+class TciCommandSpotClear final : public TciParserCommandAbsract
+{
+    Q_OBJECT
+public:
+    TciCommandSpotClear(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    bool process(QStringList &list) override;
+private:
+    TciCommandSpotClear() = delete;
+    Q_DISABLE_COPY(TciCommandSpotClear)
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+    QMetaObject::Connection m_c;
+};
+
+
+class TciCommandVolume final : public TciParserCommandAbsract
+{
+    Q_OBJECT
+
+public:
+    TciCommandVolume(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    bool process(QStringList &string) override;
+    void status() override;
+
+private:
+    TciCommandVolume() = delete;
+    Q_DISABLE_COPY(TciCommandVolume)
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+};
+
+
+
+
+class TciCommandSqlEnable : public TciParserCommandAbsract
+{
+    Q_OBJECT
+public:
+    TciCommandSqlEnable(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    ~TciCommandSqlEnable();
+    bool process(QStringList &string) override;
+    void status() override;
+
+private:
+    TciCommandSqlEnable() = delete;
+    Q_DISABLE_COPY(TciCommandSqlEnable)
+
+    void currentStatus(int trx = -1);
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+    QMetaObject::Connection m_c;
+};
+
+
+class TciCommandSqlLevel : public TciParserCommandAbsract
+{
+    Q_OBJECT
+public:
+    TciCommandSqlLevel(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    ~TciCommandSqlLevel();
+    bool process(QStringList &string) override;
+    void status() override;
+
+private:
+    TciCommandSqlLevel() = delete;
+    Q_DISABLE_COPY(TciCommandSqlLevel)
+
+    void currentStatus(int trx = -1);
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+    QMetaObject::Connection m_c;
+};
+
+
+
+
+class TciCommandVfo : public TciParserCommandAbsract
+{
+    Q_OBJECT
+public:
+    TciCommandVfo(TciParserAbstract &parser, TciTrxState &state, QObject *parent = nullptr);
+    ~TciCommandVfo();
+    bool process(QStringList &string) override;
+    void status() override;
+
+private slots:
+    void currentStatus(int trx = -1, int channel = -1);
+
+private:
+    TciCommandVfo() = delete;
+    Q_DISABLE_COPY(TciCommandVfo)
+
+    QString command(int trx, int channel);
+
+private:
+    TciParserAbstract &m_parser;
+    TciTrxState       &m_control;
+    QMetaObject::Connection m_c;
+};
+
+
+
 
 
 }  // namespace ExpertElectronics

@@ -30,10 +30,13 @@ private slots:
     void onConnectStatus(bool state);
 
     void onReadIq();
+    void onReadAudio();
     void onUpdateSpectrum();
+    void onUpdateAudioSpectrum();
+    void onTxSignal(quint32 size);
 
 private:
-    int indefOf(QComboBox *p, const QString &text);
+    int indexOf(QComboBox *p, const QString &text);
 
 private:
     QCustomPlot *pPlotter;
@@ -48,6 +51,12 @@ private:
     Window m_window;
     QVector<COMPLEX> m_signal;
     QVector<REAL>    m_magnitude;
+
+    SpectrumRingBuffer<COMPLEX> m_audioBuffer;
+
+    REAL m_phase {0};
+    REAL m_phaseStep {1000.0*6.28/48000.0};
+    QVector<COMPLEX> m_txSignal;
 };
 
 #endif // MAINWINDOW_H

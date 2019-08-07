@@ -17,7 +17,7 @@ void TciParser::processString(const QString &string)
     if (string.isEmpty())
         return;
 
-    QStringList t_list = string.split(";", QString::SkipEmptyParts);
+    QStringList t_list = string.toLower().split(";", QString::SkipEmptyParts);
     for (auto p : m_list) {
         if (p->process(t_list)) {
             if (t_list.isEmpty())

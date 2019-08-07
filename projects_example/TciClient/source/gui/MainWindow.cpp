@@ -4,6 +4,8 @@
 
 #include "MainWindow.h"
 
+static const QVector<int> AudioSampleRates {8000, 12000, 24000, 48000};
+
 MainWindow::MainWindow(QWidget *parent) :
   QMainWindow(parent),
   pPlotter(new QCustomPlot)
@@ -12,8 +14,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
     lePlotter->addWidget(pPlotter);
     pPlotter->addGraph();
+    pPlotter->addGraph();
 
     m_spectrumBuffer.resize(SpectrumSize);
+    m_audioBuffer.resize(SpectrumSize);
+
     m_window.resize(SpectrumSize);
     m_signal.resize(SpectrumSize);
     m_magnitude.resize(SpectrumSize);
@@ -43,6 +48,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
         sbRx2FilterBFreq->setMinimum(-static_cast<double>(max));
         sbRx2FilterBFreq->setMaximum( max);
+
+        sbRx1VfoA->setMinimum(min);
+        sbRx1VfoA->setMaximum(max);
+
+        sbRx2VfoA->setMinimum(min);
+        sbRx2VfoA->setMaximum(max);
     });
 
     connect(&m_tciClient.trxState(), &TciTrxState::ifLimitsChanged, [=](int min, int max) {
@@ -103,6 +114,18 @@ MainWindow::MainWindow(QWidget *parent) :
         m_tciClient.trxState().setModulation(1u, text.toLower());
     });
 
+    connect(sbRx1VfoA, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double value) {
+        m_tciClient.trxState().setVfo(0u, 0u, value);
+    });
+    connect(sbRx2VfoA, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double value) {
+        m_tciClient.trxState().setVfo(1u, 0u, value);
+    });
+    connect(&m_tciClient.trxState(), &TciTrxState::vfoChanged, [&](quint32 trx, quint32 channel, double Hz){
+        if ((trx == 0) && (channel == 0))
+            sbRx1VfoA->setValue(Hz);
+        else if ((trx == 1) && (channel == 0))
+            sbRx2VfoA->setValue(Hz);
+    });
 
     connect(&m_tciClient.trxState(), &TciTrxState::modulationsListChanged, [=](const QStringList &list) {
         disconnect(m_c1);
@@ -126,7 +149,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     connect(&m_tciClient.trxState(), &TciTrxState::modulationChanged, [=](quint32 trx, const QString &mode) {
-        int t_index = indefOf(cbRx1Mode, mode);
+        int t_index = indexOf(cbRx1Mode, mode);
         if (t_index >= 0) {
             if (trx == 0u)
                 cbRx1Mode->setCurrentIndex(t_index);
@@ -143,6 +166,12 @@ MainWindow::MainWindow(QWidget *parent) :
             cbIqSampleRate->setCurrentIndex(1);
         else if (value == 192000u)
             cbIqSampleRate->setCurrentIndex(2);
+        else if (value == 384000u)
+            cbIqSampleRate->setCurrentIndex(3);
+    });
+
+    connect(&m_tciClient.trxState(), &TciTrxState::audioSampleRateChanged, [=](quint32 value) {
+        cbAudioSampleRate->setCurrentIndex(AudioSampleRates.indexOf(value));
     });
 
     connect(&m_tciClient.trxState(), &TciTrxState::iqStartChanged, [=](quint32 trx, bool state) {
@@ -171,6 +200,12 @@ MainWindow::MainWindow(QWidget *parent) :
         m_tciClient.trxState().setIqOutSampleRate(48000 << index);
     });
 
+    connect(cbAudioSampleRate, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), [=](int index) {
+        m_tciClient.trxState().setAudioSampleRate(AudioSampleRates.at(index));
+
+        m_phaseStep = 1000.0*6.28/AudioSampleRates.at(index);
+    });
+
     connect(pbRxEnable, &QPushButton::toggled, [=](bool state) {
         m_tciClient.trxState().setRxEnable(1u, state);
     });
@@ -197,6 +232,20 @@ MainWindow::MainWindow(QWidget *parent) :
     });
     connect(pbTx2, &QPushButton::toggled, [=](bool state) {
         m_tciClient.trxState().setTrx(1u, state);
+    });
+
+
+    connect(&m_tciClient.trxState(), &TciTrxState::tuneChanged, [=](quint32 trx, bool state) {
+        if (trx == 0u)
+            pbTune->setChecked(state);
+        else if (trx == 1u)
+            pbTune2->setChecked(state);
+    });
+    connect(pbTune, &QPushButton::toggled, [=](bool state) {
+        m_tciClient.trxState().setTune(0u, state);
+    });
+    connect(pbTune2, &QPushButton::toggled, [=](bool state) {
+        m_tciClient.trxState().setTune(1u, state);
     });
 
 
@@ -354,12 +403,52 @@ MainWindow::MainWindow(QWidget *parent) :
         leCallsign->clear();
     });
 
+    connect(sbVolume,  static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged), [&](int value){
+        m_tciClient.trxState().setVolume(value);
+    });
+    connect(&m_tciClient.trxState(), &TciTrxState::volumeChanged, sbVolume, &QSpinBox::setValue);
 
-    connect(pbCwTerminate, &QPushButton::clicked, &m_tciClient.trxState(), &TciTrxState::setCwMacrosStop);
-    connect(&m_tciClient, &TciClient::readyReadIq, this, &MainWindow::onReadIq);
+
+    connect(pbRx1Sql, &QPushButton::toggled, [=](bool state) {
+        m_tciClient.trxState().setSqlEnable(0, state);
+    });
+    connect(pbRx2Sql, &QPushButton::toggled, [=](bool state) {
+        m_tciClient.trxState().setSqlEnable(1, state);
+    });
+    connect(&m_tciClient.trxState(), &TciTrxState::sqlEnableChanged, [&](quint32 trx, bool enable){
+        if (trx == 0)
+            pbRx1Sql->setChecked(enable);
+        else if (trx == 1)
+            pbRx2Sql->setChecked(enable);
+    });
+
+    connect(sbRx1SqlLevel,  static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged), [&](int value){
+        m_tciClient.trxState().setSqlLevel(0, value);
+    });
+    connect(sbRx2SqlLevel,  static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged), [&](int value){
+        m_tciClient.trxState().setSqlLevel(1, value);
+    });
+    connect(&m_tciClient.trxState(), &TciTrxState::sqlLevelChanged, [&](quint32 trx, int dB){
+        if (trx == 0)
+            sbRx1SqlLevel->setValue(dB);
+        else if (trx == 1)
+            sbRx2SqlLevel->setValue(dB);
+    });
+
+
+    connect(pbCwTerminate, &QPushButton::clicked    , &m_tciClient.trxState(), &TciTrxState::setCwMacrosStop);
+    connect(&m_tciClient, &TciClient::readyReadIq   , this, &MainWindow::onReadIq);
+    connect(&m_tciClient, &TciClient::readyReadAudio, this, &MainWindow::onReadAudio);
+    connect(&m_tciClient, &TciClient::chronoTxSignal, this, &MainWindow::onTxSignal);
     connect(&m_timer    , &QTimer::timeout, this, &MainWindow::onUpdateSpectrum);
+    connect(&m_timer    , &QTimer::timeout, this, &MainWindow::onUpdateAudioSpectrum);
 
+    connect(pbSetInFocus, &QPushButton::clicked, &m_tciClient.trxState(), &TciTrxState::setInFocus);
+    connect(pbClearSpots, &QPushButton::clicked, &m_tciClient.trxState(), &TciTrxState::setClearSpots);
 
+    connect(pbSendCommandLine, &QPushButton::clicked, [&](){
+        m_tciClient.sendText(leCommandLine->text());
+    });
 
     m_timer.start(100);
 }
@@ -389,7 +478,7 @@ void MainWindow::onConnectStatus(bool state)
     }
 }
 
-int MainWindow::indefOf(QComboBox *p, const QString &text)
+int MainWindow::indexOf(QComboBox *p, const QString &text)
 {
     if (p == nullptr)
         return -1;
@@ -434,15 +523,60 @@ void MainWindow::onUpdateSpectrum()
     pPlotter->replot();
 }
 
-void MainWindow::onReadIq()
+void MainWindow::onUpdateAudioSpectrum()
 {
-    auto t_vector = m_tciClient.iqData();
-    m_spectrumBuffer.write(t_vector);
+    if (!m_audioBuffer.readyRead())
+        return;
+
+    int t_spectrumWidth = AudioSampleRates.at(cbAudioSampleRate->currentIndex());// << cbIqSampleRate->currentIndex();
+
+    m_audioBuffer.readAll(m_signal);
+    m_window.process(m_signal.data(), m_signal.length());
+    Spectrum::fft(m_signal.data(), m_signal.length(), true);
+    Spectrum::magnitude(m_signal.data(), m_magnitude.data(), m_signal.length());
+
+    QVector<double> t_x(m_signal.length()), t_y(m_signal.length());
+
+    double t_xBegin = -0.5*t_spectrumWidth;
+    double t_xStep  =  static_cast<double>(t_spectrumWidth)/m_signal.length();
+
+    int t_index = SpectrumSize/2;
+    int t_mask  = SpectrumSize - 1;
+
+    for (int i = 0; i < m_signal.length(); ++i, t_xBegin += t_xStep) {
+        t_x[i] = t_xBegin;
+        t_y[i] = m_magnitude[t_index++&t_mask];
+    }
+
+    pPlotter->graph(1)->setData(t_x, t_y);
+
+    pPlotter->replot();
 }
 
+void MainWindow::onReadIq()
+{
+    m_spectrumBuffer.write(m_tciClient.iqData());
+}
 
+void MainWindow::onReadAudio()
+{
+    m_audioBuffer.write(m_tciClient.audioData());
+}
 
+void MainWindow::onTxSignal(quint32 size)
+{
+    m_txSignal.resize(size/2);
 
+    for (int i = 0; i < m_txSignal.size(); ++i) {
+        m_txSignal[i].re = std::cos(m_phase);
+        m_txSignal[i].re = std::sin(m_phase);
+        m_phase += m_phaseStep;
+    }
+
+    m_phase = std::fmod(m_phase, 2*M_PI);
+
+    m_tciClient.sendTxAudio(m_txSignal);
+}
 
 
 

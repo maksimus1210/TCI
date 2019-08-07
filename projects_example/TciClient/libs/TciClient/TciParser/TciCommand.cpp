@@ -319,6 +319,82 @@ void TciCommandTrx::currentStatus(int trx)
 
 
 //=================================================================================================
+// TUNE
+TciCommandTune::TciCommandTune(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(control)
+{
+    m_parser.attach(this);
+    m_c = connect(&control, &TciTrxState::tuneChanged, [=](quint32 trx, bool state)
+    { Q_UNUSED(state) currentStatus(trx); });
+}
+TciCommandTune::~TciCommandTune()
+{
+    disconnect(m_c);
+}
+bool TciCommandTune::process(QStringList &list)
+{
+    bool t_ok = false;
+    QListIterator<QString> i(list);
+    while (i.hasNext()) {
+        QString current = i.next();
+        if (!current.contains(QStringLiteral("tune"), Qt::CaseInsensitive))
+            continue;
+
+        QStringList t_list = current.split(QStringLiteral(":"), QString::SkipEmptyParts);
+        if (t_list.count() > 2)
+            continue;
+        else if (t_list.first() != QStringLiteral("tune"))
+            continue;
+
+        t_list = t_list.last().split(QStringLiteral(","), QString::SkipEmptyParts);
+        if (t_list.count() == 2) {
+            quint32 t_trx = t_list.first().toUInt(&t_ok);
+            if (t_ok) {
+                if (t_list.last().toLower() == QStringLiteral("true"))
+                    m_control.setTune(t_trx, true);
+                else if (t_list.last().toLower() == QStringLiteral("false"))
+                    m_control.setTune(t_trx, false);
+            }
+        }
+        else if (t_list.count() == 1) {
+            quint32 t_trx = t_list.first().toUInt(&t_ok);
+            if (t_ok)
+                currentStatus(t_trx);
+        }
+
+        list.removeOne(current);
+        t_ok = true;
+    }
+    return t_ok;
+}
+void TciCommandTune::status()
+{
+    currentStatus();
+}
+void TciCommandTune::currentStatus(int trx)
+{
+    if (trx < 0) {
+        // высылаем состояние TRX
+        for (quint32 i = 0u; i < m_control.trxCount(); ++i) {
+            emit message(QStringLiteral("tune:") + QString::number(i) +
+                         QStringLiteral(",") +
+                         (m_control.tune(i) ?  QStringLiteral("true") : QStringLiteral("false")) +
+                          QStringLiteral(";"));
+        }
+    }
+    else {
+        if (static_cast<quint32>(trx) < m_control.trxCount()) {
+            emit message(QStringLiteral("tune:") + QString::number(trx) +
+                         QStringLiteral(",") +
+                         (m_control.tune(trx) ?  QStringLiteral("true") : QStringLiteral("false")) +
+                         QStringLiteral(";"));
+        }
+    }
+}
+
+//=================================================================================================
 // VFO_LIMITS
 TciCommandVfoLimits::TciCommandVfoLimits(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
   TciParserCommandAbsract(parent),
@@ -543,7 +619,7 @@ bool TciCommandIqSampleRate::process(QStringList &list)
         if (t_list.count() == 2) {
             quint32 t_value = t_list.last().toUInt(&t_ok);
             if (t_ok) {
-                if ((t_value == 48000u) || (t_value == 96000u) || (t_value == 192000u))
+                if ((t_value == 48000u) || (t_value == 96000u) || (t_value == 192000u) || (t_value == 384000u))
                     m_control.setIqOutSampleRate(t_value);
             }
         }
@@ -561,6 +637,55 @@ void TciCommandIqSampleRate::status()
     emit message(QStringLiteral("iq_samplerate:") + QString::number(m_control.iqOutSampleRate()) + ";");
 }
 
+//=================================================================================================
+// AUDIO_SAMPLERATE
+TciCommandAudioSampleRate::TciCommandAudioSampleRate(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(control)
+{
+    m_parser.attach(this);
+    m_c = connect(&control, &TciTrxState::audioSampleRateChanged, [=]() { status(); });
+}
+TciCommandAudioSampleRate::~TciCommandAudioSampleRate()
+{
+    disconnect(m_c);
+}
+bool TciCommandAudioSampleRate::process(QStringList &list)
+{
+    bool t_ok = false;
+    QListIterator<QString> i(list);
+    while (i.hasNext()) {
+        QString current = i.next();
+        if (!current.contains(QStringLiteral("audio_samplerate"), Qt::CaseInsensitive))
+            continue;
+
+        QStringList t_list = current.split(QStringLiteral(":"), QString::SkipEmptyParts);
+        if (t_list.count() > 2)
+            continue;
+        else if (t_list.first() != QStringLiteral("audio_samplerate"))
+            continue;
+
+        if (t_list.count() == 2) {
+            quint32 t_value = t_list.last().toUInt(&t_ok);
+            if (t_ok) {
+                if ((t_value == 48000u) || (t_value == 24000u) || (t_value == 12000u) || (t_value == 8000u))
+                    m_control.setAudioSampleRate(t_value);
+            }
+        }
+        else if (t_list.count() == 1) {
+            status();
+        }
+
+        list.removeOne(current);
+        t_ok = true;
+    }
+    return t_ok;
+}
+void TciCommandAudioSampleRate::status()
+{
+    emit message(QStringLiteral("audio_samplerate:") + QString::number(m_control.audioSampleRate()) + ";");
+}
 
 //=================================================================================================
 // IQ_START
@@ -1709,6 +1834,339 @@ QString TciCommandRxFilter::command(int trx)
             QStringLiteral(",") + QString::number(t_high) +
             QStringLiteral(";"));
 }
+
+//=================================================================================================
+// SET_IN_FOCUS
+TciCommandSetInFocus::TciCommandSetInFocus(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(control)
+{
+    m_parser.attach(this);
+    m_c = connect(&m_control, &TciTrxState::appInFocus, [&](){
+        emit message(QStringLiteral("set_in_focus;"));
+    });
+}
+bool TciCommandSetInFocus::process(QStringList &list)
+{
+    Q_UNUSED(list);
+    return false;
+}
+
+
+//=================================================================================================
+// CLEAR_SPOTS
+TciCommandSpotClear::TciCommandSpotClear(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(control)
+{
+    m_parser.attach(this);
+    m_c = connect(&m_control, &TciTrxState::clearSpots, [&](){
+        emit message(QStringLiteral("spot_clear;"));
+    });
+}
+bool TciCommandSpotClear::process(QStringList &list)
+{
+    Q_UNUSED(list);
+    return false;
+}
+
+
+//=================================================================================================
+// VOLUME
+TciCommandVolume::TciCommandVolume(TciParserAbstract &parser, TciTrxState &state, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(state)
+{
+    connect(&m_control, &TciTrxState::volumeChanged, this, &TciCommandVolume::status);
+}
+bool TciCommandVolume::process(QStringList &list)
+{
+    bool t_ok = false;
+    QListIterator<QString> i(list);
+    while (i.hasNext()) {
+        QString current = i.next();
+        if (!current.contains(QStringLiteral("volume"), Qt::CaseInsensitive))
+            continue;
+
+        QStringList t_list = current.split(QStringLiteral(":"), QString::SkipEmptyParts);
+        if (t_list.count() > 2)
+            continue;
+        else if (t_list.first() != QStringLiteral("volume"))
+            continue;
+
+        if (t_list.count() == 2) {
+            int t_value = t_list.last().toInt(&t_ok);
+            if (t_ok)
+                  m_control.setVolume(t_value);
+        }
+        else if (t_list.count() == 1) {
+            status();
+        }
+
+        list.removeOne(current);
+        t_ok = true;
+    }
+    return t_ok;
+}
+void TciCommandVolume::status()
+{
+    emit message(QStringLiteral("volume:%1;").arg(m_control.volume()));
+}
+
+
+
+//=================================================================================================
+// Команда SQL_ENABLE
+TciCommandSqlEnable::TciCommandSqlEnable(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(control)
+{
+    m_parser.attach(this);
+    m_c = connect(&m_control, &TciTrxState::sqlEnableChanged, [=](quint32 trx, bool state)
+          { Q_UNUSED(state); currentStatus(trx); });
+
+}
+TciCommandSqlEnable::~TciCommandSqlEnable()
+{
+    disconnect(m_c);
+}
+bool TciCommandSqlEnable::process(QStringList &list)
+{
+    bool t_ok = false;
+    QListIterator<QString> i(list);
+    while (i.hasNext()) {
+        QString current = i.next();
+        if (!current.contains(QStringLiteral("sql_enable"), Qt::CaseInsensitive))
+            continue;
+
+        QStringList t_list = current.split(QStringLiteral(":"), QString::SkipEmptyParts);
+        if (t_list.count() > 3)
+            continue;
+        else if (t_list.first().toLower() != QStringLiteral("sql_enable"))
+            continue;
+
+        t_list = t_list.last().split(QStringLiteral(","), QString::SkipEmptyParts);
+        if (t_list.count() == 2) {
+            quint32 t_trx = t_list.first().toUInt(&t_ok);
+            if (t_ok) {
+                if (t_list.last().toLower() == QStringLiteral("true"))
+                    m_control.setSqlEnable(t_trx, true);
+                else if (t_list.last().toLower() == QStringLiteral("false"))
+                    m_control.setSqlEnable(t_trx, false);
+            }
+        }
+        else {
+            quint32 t_trx = t_list.first().toUInt(&t_ok);
+            if (t_ok)
+                currentStatus(t_trx);
+        }
+
+        list.removeOne(current);
+        t_ok = true;
+    }
+    return t_ok;
+}
+void TciCommandSqlEnable::status()
+{
+    currentStatus();
+}
+void TciCommandSqlEnable::currentStatus(int trx)
+{
+    if (trx < 0) {
+        for (quint32 i = 0u; i < m_control.trxCount(); ++i) {
+            emit message(QStringLiteral("sql_enable:") + QString::number(i) + QStringLiteral(",") +
+                         (m_control.sqlEnable(i) ? QStringLiteral("true") : QStringLiteral("false")) +
+                         QStringLiteral(";"));
+        }
+    }
+    else {
+        if (static_cast<quint32>(trx) < m_control.trxCount()) {
+            emit message(QStringLiteral("sql_enable:") + QString::number(trx) + QStringLiteral(",") +
+                         (m_control.sqlEnable(trx) ? QStringLiteral("true") : QStringLiteral("false")) +
+                         QStringLiteral(";"));
+        }
+    }
+}
+
+//=================================================================================================
+// RIT_OFFSET
+TciCommandSqlLevel::TciCommandSqlLevel(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(control)
+{
+    m_parser.attach(this);
+    m_c = connect(&m_control, &TciTrxState::sqlLevelChanged, [=](quint32 trx, int value)
+          { Q_UNUSED(value); currentStatus(trx); });
+
+}
+TciCommandSqlLevel::~TciCommandSqlLevel()
+{
+    disconnect(m_c);
+}
+bool TciCommandSqlLevel::process(QStringList &list)
+{
+    bool t_ok = false;
+    QListIterator<QString> i(list);
+    while (i.hasNext()) {
+        QString current = i.next();
+        if (!current.contains(QStringLiteral("sql_level"), Qt::CaseInsensitive))
+            continue;
+
+        QStringList t_list = current.split(QStringLiteral(":"), QString::SkipEmptyParts);
+        if (t_list.count() > 3)
+            continue;
+        else if (t_list.first().toLower() != QStringLiteral("sql_level"))
+            continue;
+
+        t_list = t_list.last().split(QStringLiteral(","), QString::SkipEmptyParts);
+        if (t_list.count() == 2) {
+            quint32 t_trx = t_list.first().toUInt(&t_ok);
+            if (t_ok) {
+                int t_value = t_list.last().toInt(&t_ok);
+                if (t_ok)
+                    m_control.setSqlLevel(t_trx, t_value);
+            }
+        }
+        else {
+            quint32 t_trx = t_list.first().toUInt(&t_ok);
+            if (t_ok)
+                currentStatus(t_trx);
+        }
+
+        list.removeOne(current);
+        t_ok = true;
+    }
+    return t_ok;
+}
+void TciCommandSqlLevel::status()
+{
+    currentStatus();
+}
+void TciCommandSqlLevel::currentStatus(int trx)
+{
+    if (trx < 0) {
+        for (quint32 i = 0u; i < m_control.trxCount(); ++i) {
+            emit message(QStringLiteral("sql_level:") + QString::number(i) + QStringLiteral(",") +
+                         QString::number(m_control.sqlLevel(i)) +
+                         QStringLiteral(";"));
+        }
+    }
+    else {
+        if (static_cast<quint32>(trx) < m_control.trxCount()) {
+            emit message(QStringLiteral("sql_level:") + QString::number(trx) + QStringLiteral(",") +
+                         QString::number(m_control.sqlLevel(trx)) +
+                         QStringLiteral(";"));
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//=================================================================================================
+// VFO
+TciCommandVfo::TciCommandVfo(TciParserAbstract &parser, TciTrxState &control, QObject *parent) :
+  TciParserCommandAbsract(parent),
+  m_parser(parser),
+  m_control(control)
+{
+    m_parser.attach(this);
+    m_c = connect(&control, &TciTrxState::vfoChanged, [=](quint32 trx, quint32 channel, double freq)
+    { Q_UNUSED(freq) currentStatus(trx, channel); });
+}
+TciCommandVfo::~TciCommandVfo()
+{
+    disconnect(m_c);
+}
+bool TciCommandVfo::process(QStringList &list)
+{
+    bool t_ok = false;
+    QListIterator<QString> i(list);
+    while (i.hasNext()) {
+        QString current = i.next();
+        if (!current.contains(QStringLiteral("vfo"), Qt::CaseInsensitive))
+            continue;
+
+        QStringList t_list = current.split(QStringLiteral(":"), QString::SkipEmptyParts);
+        if ((t_list.count() != 2))
+            continue;
+        else if (t_list.first().toLower() != QStringLiteral("vfo"))
+            continue;
+
+        t_list = t_list.last().split(QStringLiteral(","), QString::SkipEmptyParts);
+        if (t_list.count() == 3) {
+            int t_trx = t_list.at(0).toInt(&t_ok);
+            if (t_ok) {
+                int t_channel = t_list.at(1).toInt(&t_ok);
+                if (t_ok) {
+                    qint64 t_freq = t_list.at(2).toLongLong(&t_ok);
+                    if (t_ok)
+                        m_control.setVfo(t_trx, t_channel, static_cast<double>(t_freq));
+                }
+            }
+        }
+
+        list.removeOne(current);
+        t_ok = true;
+    }
+    return t_ok;
+}
+void TciCommandVfo::status()
+{
+    currentStatus();
+}
+void TciCommandVfo::currentStatus(int trx, int channel)
+{
+    if (trx < 0) {
+        for (quint32 i = 0u; i < m_control.trxCount(); ++i) {
+            if (channel < 0) {
+                for (quint32 j = 0u; j < m_control.channelsCount(); ++j)
+                    emit message(command(i, j));
+            }
+            else {
+                if (channel < m_control.channelsCount())
+                    emit message(command(i, channel));
+            }
+        }
+    }
+    else {
+        if (static_cast<quint32>(trx) < m_control.trxCount()) {
+            if (channel < 0) {
+                for (quint32 j = 0u; j < m_control.channelsCount(); ++j)
+                    emit message(command(trx, j));
+            }
+            else {
+                if (channel < m_control.channelsCount())
+                    emit message(command(trx, channel));
+            }
+        }
+    }
+}
+QString TciCommandVfo::command(int trx, int channel)
+{
+    return QStringLiteral("vfo:%1,%2,%3;").arg(trx).arg(channel).arg(static_cast<qint64>(m_control.vfo(trx, channel)));
+}
+
+
+
+
 
 
 }  // namespace ExpertElectronics

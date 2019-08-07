@@ -19,58 +19,50 @@ public:
     explicit TciTrxState(QObject *parent = nullptr);
 
     void setTrxCount(quint32 value);
-
     quint32 trxCount() const;
 
     void setChannelsCount(quint32 value);
-
     quint32 channelsCount() const;
 
     void setVfoLimits(quint64 min, quint64 max);
-
     qint64 vfoMin() const;
-
     qint64 vfoMax() const;
 
     void setIfLimits(int min, int max);
-
     qint64 ifMin() const;
-
     qint64 ifMax() const;
 
     void setModulationsList(const QStringList &list);
-
     QStringList modulationsList() const;
 
     void setIqOutSampleRate(quint32 value);
-
     quint32 iqOutSampleRate() const;
 
-    void setAudioStart(quint32 trx, bool state);
+    void setAudioSampleRate(quint32 value);
+    quint32 audioSampleRate() const;
 
+    void setAudioStart(quint32 trx, bool state);
     bool audioStart(quint32 trx) const;
 
     void setIqStart(quint32 trx, bool state);
-
     bool iqStart(quint32 trx) const;
 
     quint32 cwSpeed() const noexcept;
-
     quint32 cwMacrosDelay() const noexcept;
 
     bool ritEnable(quint32 trx) const;
-
     bool xitEnable(quint32 trx) const;
-
     bool splitEnable(quint32 trx) const;
-
     int ritOffset(quint32 trx) const;
-
     int xitOffset(quint32 trx) const;
 
-    bool channelEnable(quint32 trx, quint32 channel) const;
+     bool sqlEnable(quint32 trx) const;
+     int sqlLevel(quint32 trx) const;
 
+    bool channelEnable(quint32 trx, quint32 channel) const;
     bool rxFilter(quint32 trx, int &low, int &high);
+
+    int volume() const;
 
 public slots:
     void setRxEnable(quint32 trx, bool state);
@@ -92,16 +84,19 @@ public slots:
     int preamp() const;
 
     void setDdsFreq(quint32 trx, double freq);
-
     double ddsFreq(quint32 trx);
 
     void setIfFreq(quint32 trx, quint32 channel, double freq);
-
     double ifFreq(quint32 trx, quint32 channel);
 
-    void setTrx(quint32 trx, bool state);
+    void setVfo(quint32 trx, quint32 channel, double freq);
+    double vfo(quint32 trx, quint32 channel);
 
+    void setTrx(quint32 trx, bool state);
     bool trx(quint32 trx);
+
+    void setTune(quint32 trx, bool state);
+    bool tune(quint32 trx);
 
     void setModulation(quint32 trx, const QString &mode);
 
@@ -133,6 +128,10 @@ public slots:
 
     void setXitOffset(quint32 trx, int value);
 
+    void setSqlEnable(quint32 trx, bool state);
+
+    void setSqlLevel(quint32 trx, int value);
+
     void setChannelEnable(quint32 trx, quint32 channel, bool state);
 
     void setRxFilter(quint32 trx, int low, int high);
@@ -140,6 +139,12 @@ public slots:
     void setCwMessage(quint32 trx, const QString &before, const QString &callsign, const QString &after);
 
     void addCwMessageCallsign(const QString &callsign);
+
+    void setInFocus();
+
+    void setClearSpots();
+
+    void setVolume(int value);
 
 signals:
     void started();
@@ -151,7 +156,11 @@ signals:
 
     void ifFreqChanged(quint32 trx, quint32 channel, double value);
 
+    void vfoChanged(quint32 trx, quint32 channel, double value);
+
     void trxChanged(quint32 trx, bool state);
+
+    void tuneChanged(quint32 trx, bool state);
 
     void vfoLimitsChanged(quint64 min, quint64 max);
 
@@ -162,6 +171,8 @@ signals:
     void modulationChanged(quint32 trx, QString mode);
 
     void iqOutSampleRateChanged(quint32 value);
+
+    void audioSampleRateChanged(quint32 value);
 
     void iqStartChanged(quint32 trx, bool state);
 
@@ -192,6 +203,10 @@ signals:
 
     void xitOffsetChanged(quint32 trx, int value);
 
+    void sqlEnableChanged(quint32 trx, bool state);
+
+    void sqlLevelChanged(quint32 trx, int value);
+
     void channelEnableChanged(quint32 trx, quint32 channel, bool state);
 
     void rxFilterChanged(quint32 trx, int low, int high);
@@ -199,6 +214,12 @@ signals:
     void cwMessage(quint32 trx, QString before, QString callsign, QString after);
 
     void cwMessageCallsign(const QString &callsign);
+
+    void appInFocus();
+
+    void clearSpots();
+
+    void volumeChanged(int);
 
 private:
     Q_DISABLE_COPY(TciTrxState)
@@ -211,10 +232,12 @@ private:
     int     m_ifMin;
     int     m_ifMax;
     quint32 m_iqOutSampleRate;
+    quint32 m_audioSampleRate;
     quint32 m_cwSpeed;
     quint32 m_cwDelay;
     QJsonObject m_state;
     QStringList m_mudulations;
+    int     m_volume;
 };
 
 }  // namespace ExpertElectronics

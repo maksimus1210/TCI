@@ -10,7 +10,9 @@ static const QString CmdStart("start");
 static const QString CmdPramp("preamp");
 static const QString CmdDds("dds");
 static const QString CmdIf("if");
+static const QString CmdVfo("vfo");
 static const QString CmdTrx("trx");
+static const QString CmdTune("tune");
 static const QString CmdMode("mode");
 static const QString CmdIqStart("iq_start");
 static const QString CmdAudioStart("audio_start");
@@ -24,6 +26,8 @@ static const QString CmdRitOffset("rit_offset");
 static const QString CmdXitOffset("xit_offset");
 static const QString CmdRxFilterLow("rx_filter_l");
 static const QString CmdRxFilterHigh("rx_filter_h");
+static const QString CmdSqlEnable("sql_enable");
+static const QString CmdSqlLevel("sql_level");
 
 TciTrxState::TciTrxState(QObject *parent) :
   QObject(parent),
@@ -34,8 +38,10 @@ TciTrxState::TciTrxState(QObject *parent) :
   m_ifMin(-24000),
   m_ifMax(24000),
   m_iqOutSampleRate(48000u),
+  m_audioSampleRate(48000u),
   m_cwSpeed(30u),
-  m_cwDelay(50u)
+  m_cwDelay(50u),
+  m_volume(100u)
 {
     m_state[CmdStart]           = false;
     m_state[CmdPramp]           = 0;
@@ -235,6 +241,27 @@ double TciTrxState::ifFreq(quint32 trx, quint32 channel)
     return m_state[CmdIf + ":" + QString::number(trx) + "," + QString::number(channel)].toDouble(0.0);
 }
 
+
+void TciTrxState::setVfo(quint32 trx, quint32 channel, double freq)
+{
+    if ((trx >= m_trxCount) || (channel >= m_channelsCount))
+        return;
+
+    QString t_key = CmdVfo + ":" + QString::number(trx) + "," + QString::number(channel);
+    if (static_cast<qint64>(m_state[t_key].toDouble(0.0)) == static_cast<qint64>(freq))
+        return;
+
+    m_state[t_key] = freq;
+    emit vfoChanged(trx, channel, freq);
+}
+double TciTrxState::vfo(quint32 trx, quint32 channel)
+{
+    if ((trx >= m_trxCount) || (channel >= m_channelsCount))
+        return 0.0;
+
+    return m_state[CmdVfo + ":" + QString::number(trx) + "," + QString::number(channel)].toDouble(0.0);
+}
+
 void TciTrxState::setTrx(quint32 trx, bool state)
 {
     if (trx >= m_trxCount)
@@ -253,6 +280,27 @@ bool TciTrxState::trx(quint32 trx)
         return false;
 
     return m_state[CmdTrx + ":" + QString::number(trx)].toBool(false);
+}
+
+void TciTrxState::setTune(quint32 trx, bool state)
+{
+    if (trx >= m_trxCount)
+        return;
+
+    QString t_key = CmdTune + ":" + QString::number(trx);
+    if (m_state[t_key].toBool(false) == state)
+        return;
+
+    m_state[t_key] = state;
+    emit tuneChanged(trx, state);
+}
+
+bool TciTrxState::tune(quint32 trx)
+{
+    if (trx >= m_trxCount)
+        return false;
+
+    return m_state[CmdTune + ":" + QString::number(trx)].toBool(false);
 }
 
 void TciTrxState::setModulation(quint32 trx, const QString &mode)
@@ -292,6 +340,19 @@ quint32 TciTrxState::iqOutSampleRate() const
     return m_iqOutSampleRate;
 }
 
+
+void TciTrxState::setAudioSampleRate(quint32 value)
+{
+    if (m_audioSampleRate == value)
+        return;
+
+    m_audioSampleRate = value;
+    emit audioSampleRateChanged(value);
+}
+quint32 TciTrxState::audioSampleRate() const
+{
+    return m_audioSampleRate;
+}
 
 void TciTrxState::setIqStart(quint32 trx, bool state)
 {
@@ -469,6 +530,50 @@ int TciTrxState::ritOffset(quint32 trx) const
     return m_state[t_key].toInt(0);
 }
 
+void TciTrxState::setSqlEnable(quint32 trx, bool state)
+{
+    if (trx >= m_trxCount)
+        return;
+
+    QString t_key = CmdSqlEnable + ":" + QString::number(trx);
+    if (m_state[t_key].toBool() == state)
+        return;
+
+    m_state[t_key] = state;
+    emit sqlEnableChanged(trx, state);
+}
+
+bool TciTrxState::sqlEnable(quint32 trx) const
+{
+    if (trx >= m_trxCount)
+        return false;
+
+    QString t_key = CmdSqlEnable + ":" + QString::number(trx);
+    return m_state[t_key].toBool();
+}
+
+void TciTrxState::setSqlLevel(quint32 trx, int value)
+{
+    if (trx >= m_trxCount)
+        return;
+
+    QString t_key = CmdSqlLevel + ":" + QString::number(trx);
+    if (m_state[t_key].toInt(-100) == value)
+        return;
+
+    m_state[t_key] = value;
+    emit sqlLevelChanged(trx, value);
+}
+
+int TciTrxState::sqlLevel(quint32 trx) const
+{
+    if (trx >= m_trxCount)
+        return false;
+
+    QString t_key = CmdSqlLevel + ":" + QString::number(trx);
+    return m_state[t_key].toInt(-100);
+}
+
 void TciTrxState::setXitOffset(quint32 trx, int value)
 {
     if (trx >= m_trxCount)
@@ -557,7 +662,30 @@ void TciTrxState::addCwMessageCallsign(const QString &callsign)
     emit cwMessageCallsign(callsign);
 }
 
+void TciTrxState::setInFocus()
+{
+    emit appInFocus();
+}
 
+void TciTrxState::setClearSpots()
+{
+    emit clearSpots();
+}
+
+int TciTrxState::volume() const
+{
+    return m_volume;
+}
+
+void TciTrxState::setVolume(int value)
+{
+    value = qBound(-60, value, 0);
+
+    if (m_volume != value) {
+        m_volume = value;
+        emit volumeChanged(m_volume);
+    }
+}
 
 
 }  // namespace ExpertElectronics
